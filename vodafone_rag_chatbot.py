@@ -321,19 +321,19 @@ with open("data/knowledge_base/technical_support.txt", "w", encoding="utf-8") as
 
 with open("data/knowledge_base/vodafone_pay.txt", "w", encoding="utf-8") as f:
     f.write(vodafone_pay_content)
+# encoding="utf-8" مهم للعربي خد بالك
 
-
-
+# data pre
 def load_documents(data_dir="data/knowledge_base"):
-    data_path = Path(data_dir)
-    documents = []
+    data_path = Path(data_dir)  #tahwel el txt to Object 
+    documents = []      #collect all documents 
 
-    for txt_file in data_path.glob("*.txt"):
-        try:
+    for txt_file in data_path.glob("*.txt"): # .txt ابحث عن كل الملفات التي تنتهي  
+        try:  # تحميل ملف نصي وتحويله إلى Documents.
             loader = TextLoader(str(txt_file), encoding="utf-8")
             documents.extend(loader.load())
         except Exception as e:
-            logger.error(f"خطأ : {txt_file.name} : {e}")
+            logger.error(f"error : {txt_file.name} : {e}")
 
     for pdf_file in data_path.glob("*.pdf"):
         try:
@@ -345,13 +345,14 @@ def load_documents(data_dir="data/knowledge_base"):
     return documents
 
 
-def split_documents(documents, chunk_size=512, chunk_overlap=64):
+# hamel chunk
+def split_documents(documents, chunk_size=501, chunk_overlap=64):
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         length_function=len,
-        separators=["\n\n", "\n", ".", "،", " ", ""],
-    )
+        separators=["\n\n", "\n", ".", "،", " ", "", "-"],
+              )
     return splitter.split_documents(documents)
 
 
@@ -359,19 +360,25 @@ def build_vectorstore(embedding_model, force_rebuild=False):
     vectorstore_path = Path("data/vectorstore")
 
     if vectorstore_path.exists() and not force_rebuild:
-        vectorstore = FAISS.load_local(
+        # لو الفايل موجود + مش عايز أعيد بناءه
+        vectorstore = FAISS.load_local( #تحميل index محفوظ على الجهاز
             str(vectorstore_path),
-            embedding_model,
-            allow_dangerous_deserialization=True,
+            embedding_model, #  لو غيرت بناء embedding model لازم تعيد بناء vectorstore
+            allow_dangerous_deserialization=True, # أنا واثق من الملف ده، فكّه عادي 
         )
         return vectorstore
-
+           # تحميل الملفات وتقسيمها
     documents = load_documents()
     chunks = split_documents(documents)
-
-    vectorstore = FAISS.from_documents(documents=chunks, embedding=embedding_model)
+    
+# b nhawel el chunks l embeddings w n5azen el vectors gwa faiss
+    vectorstore = FAISS.from_documents(documents=chunks, embedding=embedding_model,
+                                      distance_strategy=DistanceStrategy.COSINE)
+                         
+    
+                    # حفظه على الجها
     vectorstore_path.mkdir(parents=True, exist_ok=True)
-    vectorstore.save_local(str(vectorstore_path))
+    vectorstore.save_local(str(vectorstore_path)) # علشان مش كل شويه اعمل شانك وانبدنج 
 
     return vectorstore
 
@@ -380,97 +387,138 @@ vectorstore = build_vectorstore(embedding_model)
 
 
 def retrieve_context(query, vectorstore, top_k=5, score_threshold=0.3):
-    results = vectorstore.similarity_search_with_score(query=query, k=top_k)
+
+    # search باستخدام cosine similarity
+    #يبحث داخل الـ vector database
+    results = vectorstore.similarity_search_with_relevance_scores(
+        query=query,
+        k=top_k)
+
     filtered_docs = []
     filtered_scores = []
-
-    for doc, score in results:
-        similarity = 1 / (1 + score)
+    # يحسب similarity
+    # يجلب أفضل chunks
+    for doc, similarity in results:
+        
+        # يفلتر النتائج الضعيفة
         if similarity >= score_threshold:
             filtered_docs.append(doc)
             filtered_scores.append(similarity)
-
+  
     return filtered_docs, filtered_scores
 
 
+
+
+# Decooooder 
+#  لازم نحول filtered_docs , filtered_scores LLM نص مرتب قبل
+ # Prompt Engineering
+ # retrieved chunks
+# يقرأ metadata
+# ينسق الـ scores
+ # يبني prompt context مرتب
+# يحول الـ documents إلى نص جاهز للـ LLM
 def format_context(documents, scores):
     if not documents:
         return "eroooorrrrr"
 
     context_parts = []
     for i, (doc, score) in enumerate(zip(documents, scores), 1):
-        source = doc.metadata.get("source", "مجهول")
+        source = doc.metadata.get("source", "un_known")
         source_name = Path(source).name if source != "unknown" else "unknown"
-        context_parts.append(f"[مصدر {i}: {source_name} |  : {score:.2%}]\n{doc.page_content.strip()}")
+        context_parts.append(f"[from {i}: {source_name} |  : {score:.2%}]\n{doc.page_content.strip()}")
 
     return "\n---\n".join(context_parts)
 
+'''
+respose
+[مصدر 1: internet.txt | 91.22%]
+الباقة المميزة
+80 GB
+'''
+
+
+#هنا  Client للتواصل مع Groq Api
+
+# يبني الـ prompt
+# يضيف conversation memory
+# يضيف retrieved context
+# يرسل الطلب لـ Groq LLM
+# يولد الرد النهائي
+# يتحكم في الـ tone والـ hallucination
+# يمثل الجزء التوليدي من الـ RAG
 
 groq_client = Groq(api_key=GROQ_API_KEY)
-
-
 def generate_response(query, context, conversation_history):
-    system_prompt = """انت مساعد خدمة عملاء Vodafone المتخصص. مهمتك مساعدة العملاء في باقات الانترنت وخطط الاتصال وVodafone Pay والدعم الفني.
+    system_prompt =
+    """انت مساعد خدمة عملاء Vodafone المتخصص. مهمتك مساعدة العملاء في باقات الانترنت وخطط الاتصال وVodafone Pay والدعم الفني.
 استخدم المعلومات المقدمة فقط. اذا لم تجد اجابة قل ذلك واقترح الاتصال على 888.
-كن وديا ومحترفا واستخدم اللغة العربية البسيطة."""
+كن وديا ومحترفا واستخدم اللغة العربية البسيطة
+"""
 
     messages = []
-    for msg in conversation_history[-10:]:
+    for msg in conversation_history[-10:]: #آخر 10 رسائل  
         messages.append({"role": msg["role"], "content": msg["content"]})
-
+   # هنا بعمل Chat Format
     messages.append({
         "role": "user",
-        "content": f"معلومات من قاعدة المعرفة:\n{context}\n\nسؤال العميل:\n{query}\n\naجب بناء على المعلومات المقدمة فقط."
+        "content": f"from chunk num :\n{context}\n\nسؤال العميل:\n{query}\n\naجب بناء على المعلومات المقدمة فقط."
     })
 
-    try:
+    try:  #هنا يتم دمج:system prompt مع conversation messages
         response = groq_client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[{"role": "system", "content": system_prompt}] + messages,
-            max_tokens=1024,
-            temperature=0.3,
+            max_tokens=900,
+              temperature=0.2,
         )
-        return response.choices[0].message.content
+        return response.choices[0].message.content # أول رد
     except Exception as e:
-        logger.error(f"خطأ في Groq : {e}")
-        return f"حدث خطأ في الاتصال بالنموذج : {str(e)}"
+        logger.error(f"eroor  Groq : {e}") #لو حصل خطأ خزنه داخل e
+
+        return f"eroor : {str(e)}"
 
 
-conversation_history = []
+conversation_history = [] #دي Memory بسيطة للمحادثة
 
 
 def chat(user_message, top_k=5):
     global conversation_history
 
-    start_time = time.time()
+    start_time = time.time() #Response Latency
 
     relevant_docs, scores = retrieve_context(user_message, vectorstore, top_k)
     context = format_context(relevant_docs, scores)
     response_text = generate_response(user_message, context, conversation_history)
-
+     
+    #Conversation Buffer Memory
+    #تحفظ رسالة المستخدم
     conversation_history.append({"role": "user", "content": user_message})
     conversation_history.append({"role": "assistant", "content": response_text})
-
+    conversation_history = conversation_history[-20:] #Conversation Memory Limit
+    #يتم إنشاء Dictionary لكل مصدر
     sources = []
     for doc, score in zip(relevant_docs, scores):
         sources.append({
             "file": Path(doc.metadata.get("source", "")).name,
-            "relevance": f"{score:.2%}",
-            "preview": doc.page_content[:150],
+            "relevance": f"{score:.2%}", # similarity إلى نسبة مئوية
+            "preview": doc.page_content[:150], #ول 150 حرف 
         })
 
+    #هنا ترجع النتيجة النهائية بشكل Structured
     return {
         "answer": response_text,
         "sources": sources,
-        "response_time": f"{round(time.time() - start_time, 2)} ثانية",
-        "docs_retrieved": len(relevant_docs),
+        "response_time": f"{round(time.time() - start_time, 2)} sec",#مدة تنفيذ الطلب
+        "docs_retrieved": len(relevant_docs),    #عدد الـ chunks المستخدمة
+                                                  #تقريب لـ رقمين عشريين
     }
 
 
 def clear_history():
     global conversation_history
     conversation_history = []
-    print("   ")
+    print(" deleted done ya 3am mafesh ")
 
 
 
@@ -680,5 +728,5 @@ async def search_documents(query: str, top_k: int = 5):
 
 # uvicorn.run(app, host="0.0.0.0", port=8000)
 
-print("تم تعريف FastAPI")
-print("المشروع جاهز -  :   yalla penaaaaaaaaaa")
+print("FastAPI done")
+print(" جاهز -  :   yalla penaaaaaaaaaa")
