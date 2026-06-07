@@ -29,21 +29,139 @@ logger = logging.getLogger(__name__)
 # logger = logging.getLogger("chatbot")    Logging Config 
 
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "your-groq-api-key-here")
-GROQ_MODEL = "llama3-70b-8192"
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "my-groq-api-key-here")
+# os.getenv("VARIABLE_NAME", default_value)
+GROQ_MODEL = "llama3-70b-8192" # Meta Llama 3
 EMBEDDING_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
+'''
+law colab 
+from google.colab import userdata
+api_key = userdata.get("groq")
+
+'''
+'''
+########### law h upkload file PDF 
+!pip install -q langchain langchain-community langchain-huggingface \
+langchain-groq chromadb pypdf sentence-transformers
+
+
+import os
+from google.colab import files
+from langchain_community.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain_groq import ChatGroq
+from langchain.chains import ConversationalRetrievalChain
+from langchain.memory import ConversationBufferMemory
+
+os.environ["GROQ_API_KEY"] = "PUT_YOUR_GROQ_API_KEY"
+
+
+uploaded = files.upload()
+pdf_file = list(uploaded.keys())[0]
+
+
+
+loader = PyPDFLoader(pdf_file)
+
+docs = loader.load()
+
+print(f"num of pages : {len(docs)}")
+
+# Chunking
+
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,
+    chunk_overlap=50
+)
+
+splits = text_splitter.split_documents(docs)
+
+print(f"عدد الـ Chunks: {len(splits)}")
+
+# Embedding Model
+
+embedding_model = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    model_kwargs={"device": "cpu"},
+    encode_kwargs={"normalize_embeddings": True}
+)
+
+# Vector Store
+
+vectorstore = Chroma.from_documents(
+    documents=splits,
+    embedding=embedding_model,
+    persist_directory="./chroma_db"
+)
+
+# Retriever
+
+retriever = vectorstore.as_retriever(
+    search_kwargs={"k": 3}
+)
+
+# LLM
+
+llm = ChatGroq(
+    model_name="llama3-70b-8192",
+    temperature=0
+)
+
+# Memory
+
+memory = ConversationBufferMemory(
+    memory_key="chat_history",
+    return_messages=True
+)
+
+
+# Conversational RAG Chain
+
+qa_chain = ConversationalRetrievalChain.from_llm(
+    llm=llm,
+    retriever=retriever,
+    memory=memory
+)
+
+# Chat Loop
+
+print("Vodafone Chatbot جاهز")
+print(" to exit write exit \n")
+
+while True:
+
+    question = input("you: ")
+
+    if question.lower() == "exit":
+        print("تم إنهاء الشات")
+        break
+
+    response = qa_chain.invoke(
+        {"question": question}
+    )
+
+    print("\nالبوت:")
+    print(response["answer"])
+    print("\n" + "="*60 + "\n")
+'''
 
 embedding_model = HuggingFaceEmbeddings(
     model_name=EMBEDDING_MODEL_NAME,
     model_kwargs={"device": "cpu"},
-    encode_kwargs={"normalize_embeddings": True},
+    encode_kwargs={"normalize_embeddings": True},# vector=1 عشان ال Similarity Search يبقى أدق
 )
 
 
 os.makedirs("data/knowledge_base", exist_ok=True)
 os.makedirs("data/vectorstore", exist_ok=True)
+# Directories بيعمل فولدرات 
 
+
+# Knowledge Base
+# انا عملت كنولدج بيز علشان مش لاقي pdf ل فودافون
 
 internet_plans_content = """
 باقات انترنت Vodafone
@@ -191,6 +309,7 @@ Vodafone Pay هو محفظة رقمية تتيح لك ارسال واستقبا�
 ترقية الحساب توفر حدودا اعلى
 """
 
+# habdaa ahawel el knowledge base le file.txt
 with open("data/knowledge_base/internet_plans.txt", "w", encoding="utf-8") as f:
     f.write(internet_plans_content)
 
