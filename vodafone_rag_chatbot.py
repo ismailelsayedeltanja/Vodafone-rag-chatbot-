@@ -22,6 +22,8 @@ logging.basicConfig(
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler("logs/isma3il_chat.log", mode="a", encoding="utf-8"),
+          # "w"  يمسح القدي
+          # "a"	يضيف على القديم
     ],
 )
 logger = logging.getLogger(__name__)
