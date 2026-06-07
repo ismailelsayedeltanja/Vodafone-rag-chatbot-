@@ -18,6 +18,7 @@ os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
+    #2025-12-7 18:00:22 | INFO | bot started
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler("logs/chatbot.log", mode="a", encoding="utf-8"),
