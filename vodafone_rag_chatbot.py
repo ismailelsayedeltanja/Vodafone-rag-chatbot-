@@ -21,7 +21,7 @@ logging.basicConfig(
     #2025-12-7 18:00:22 | INFO | bot started
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("logs/chatbot.log", mode="a", encoding="utf-8"),
+        logging.FileHandler("logs/isma3il_chat.log", mode="a", encoding="utf-8"),
     ],
 )
 logger = logging.getLogger(__name__)
