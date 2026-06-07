@@ -26,6 +26,7 @@ logging.basicConfig(
           # "a"	يضيف على القديم
     ],)
 logger = logging.getLogger(__name__)
+# logger = logging.getLogger("chatbot")    Logging Config 
 
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "your-groq-api-key-here")
