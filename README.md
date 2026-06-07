@@ -4,9 +4,20 @@ Vodafone Customer Service RAG Chatbot
 Developer: Ismail Elsayed
 GitHub: https://github.com/ismailelsayedeltanja
 
+
 Overview
 A RAG-based customer service chatbot for Vodafone Egypt. It answers questions about internet plans, calling plans, technical support, and Vodafone Pay by searching a knowledge base and generating responses using Groq.
 
+
+data/
+└── knowledge_base/
+    ├── internet_plans.txt
+    ├── calling_plans.txt
+    ├── technical_support.txt
+    └── vodafone_pay.txt 
+
+
+    
 Tech Stack
 
 LLM: Groq API (Llama 3 70B)
