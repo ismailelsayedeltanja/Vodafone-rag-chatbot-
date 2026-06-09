@@ -59,7 +59,7 @@ docs = loader.load()
 print(f"num of pages : {len(docs)}")
 
 '''
-
+# Encoder
 embedding_model = HuggingFaceEmbeddings(
     model_name=EMBEDDING_MODEL_NAME,
     model_kwargs={"device": "cpu"},
@@ -68,13 +68,12 @@ embedding_model = HuggingFaceEmbeddings(
 
 
 os.makedirs("data/knowledge_base", exist_ok=True)
-os.makedirs("data/vectorstore", exist_ok=True)
+os.makedirs("data/vectorstore", exist_ok=True) # مكان vector db
 # Directories بيعمل فولدرات 
 
 
 # Knowledge Base
 # انا عملت كنولدج بيز علشان مش لاقي pdf ل فودافون
-
 internet_plans_content = """
 باقات انترنت Vodafone
 
@@ -237,14 +236,14 @@ with open("data/knowledge_base/vodafone_pay.txt", "w", encoding="utf-8") as f:
 
 # data pre
 def load_documents(data_dir="data/knowledge_base"):
-    data_path = Path(data_dir)  #tahwel el txt to Object 
+    data_path = Path(data_dir)  # tahwel el txt to Documents 
     documents = []      #collect all documents 
 
     for txt_file in data_path.glob("*.txt"): # .txt ابحث عن كل الملفات التي تنتهي  
         try:  # تحميل ملف نصي وتحويله إلى Documents.
             loader = TextLoader(str(txt_file), encoding="utf-8")
             documents.extend(loader.load())
-        except Exception as e:
+        except Exception as e: # لو حصل Error خزنه داخل e
             logger.error(f"error : {txt_file.name} : {e}")
 
     for pdf_file in data_path.glob("*.pdf"):
@@ -258,7 +257,7 @@ def load_documents(data_dir="data/knowledge_base"):
 
 
 # hamel chunk
-def split_documents(documents, chunk_size=501, chunk_overlap=64):
+def split_documents(documents, chunk_size=501, chunk_overlap=60):
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
@@ -277,18 +276,21 @@ def build_vectorstore(embedding_model, force_rebuild=False):
             str(vectorstore_path),
             embedding_model, #  لو غيرت بناء embedding model لازم تعيد بناء vectorstore
             allow_dangerous_deserialization=True, # أنا واثق من الملف ده، فكّه عادي 
-        )
+                                       )
         return vectorstore
-           # تحميل الملفات وتقسيمها
+        
+    # تحميل الملفات وتقسيمها
     documents = load_documents()
     chunks = split_documents(documents)
     
-# b nhawel el chunks l embeddings w n5azen el vectors gwa faiss
-    vectorstore = FAISS.from_documents(documents=chunks, embedding=embedding_model,
-                                      distance_strategy=DistanceStrategy.COSINE)
+     # Semantic Search
+    vectorstore = FAISS.from_documents(
+        documents=chunks, 
+        embedding=embedding_model,                              
+        distance_strategy=DistanceStrategy.COSINE)
                          
     
-                    # حفظه على الجها
+  # حفظه على الجها
     vectorstore_path.mkdir(parents=True, exist_ok=True)
     vectorstore.save_local(str(vectorstore_path)) # علشان مش كل شويه اعمل شانك وانبدنج 
 
@@ -298,12 +300,12 @@ def build_vectorstore(embedding_model, force_rebuild=False):
 vectorstore = build_vectorstore(embedding_model)
 
 
-def retrieve_context(query, vectorstore, top_k=5, score_threshold=0.3):
-
+def retrieve_context(query, vectorstore, top_k=4, score_threshold=0.3):
     # search باستخدام cosine similarity
-    #يبحث داخل الـ vector database
+    # يبحث داخل vector database
+    # السؤال يتحول Vector
     results = vectorstore.similarity_search_with_relevance_scores(
-        query=query,
+        query=query, #الفرق بينها وبين similarity_search() ترجع (doc, score)
         k=top_k)
 
     filtered_docs = []
@@ -313,7 +315,7 @@ def retrieve_context(query, vectorstore, top_k=5, score_threshold=0.3):
     for doc, similarity in results:
         
         # يفلتر النتائج الضعيفة
-        if similarity >= score_threshold:
+        if similarity >= score_threshold:  # هل النتيجة دي قوية كفاية
             filtered_docs.append(doc)
             filtered_scores.append(similarity)
   
@@ -331,8 +333,8 @@ def retrieve_context(query, vectorstore, top_k=5, score_threshold=0.3):
  # يبني prompt context مرتب
 # يحول الـ documents إلى نص جاهز للـ LLM
 def format_context(documents, scores):
-    if not documents:
-        return "eroooorrrrr"
+    if not documents:  # if len(documents) == 0:
+        return "No relevant context found"  # fallback messages لازم تكون meaningful
 
     context_parts = []
     for i, (doc, score) in enumerate(zip(documents, scores), 1):
@@ -360,13 +362,17 @@ respose
 # يتحكم في الـ tone والـ hallucination
 # يمثل الجزء التوليدي من الـ RAG
 
-groq_client = Groq(api_key=GROQ_API_KEY)
+groq_client = Groq(api_key=GROQ_API_KEY) # يبعت requests
+                                         # يستقبل responses
 def generate_response(query, context, conversation_history):
-    system_prompt =
-    """انت مساعد خدمة عملاء Vodafone المتخصص. مهمتك مساعدة العملاء في باقات الانترنت وخطط الاتصال وVodafone Pay والدعم الفني.
-استخدم المعلومات المقدمة فقط. اذا لم تجد اجابة قل ذلك واقترح الاتصال على 888.
-كن وديا ومحترفا واستخدم اللغة العربية البسيطة
-"""
+    system_prompt = # توليد الرد النهائي للمستخدم
+    """
+    ممنوع تجاوب من دماغك
+    انت مساعد خدمة عملاء Vodafone المتخصص
+    مهمتك مساعدة العملاء في باقات الانترنت وخطط الاتصال وVodafone Pay والدعم الفني.
+    استخدم المعلومات المقدمة فقط اذا لم تجد اجابة قل ذلك واقترح الاتصال على 888
+    كن وديا ومحترفا واستخدم اللغة العربية البسيطة
+    """
 
     messages = []
     for msg in conversation_history[-10:]: #آخر 10 رسائل  
@@ -391,14 +397,13 @@ def generate_response(query, context, conversation_history):
         return f"eroor : {str(e)}"
 
 
-conversation_history = [] #دي Memory بسيطة للمحادثة
 
-
+conversation_history = []  # دي Memory بسيطة للمحادثة
 def chat(user_message, top_k=5):
     global conversation_history
 
     start_time = time.time() #Response Latency
-
+    # هنا بدأ  Semantic Search
     relevant_docs, scores = retrieve_context(user_message, vectorstore, top_k)
     context = format_context(relevant_docs, scores)
     response_text = generate_response(user_message, context, conversation_history)
@@ -408,31 +413,30 @@ def chat(user_message, top_k=5):
     conversation_history.append({"role": "user", "content": user_message})
     conversation_history.append({"role": "assistant", "content": response_text})
     conversation_history = conversation_history[-20:] #Conversation Memory Limit
-    #يتم إنشاء Dictionary لكل مصدر
+    # يتم إنشاء Dictionary لكل مصدر
     sources = []
     for doc, score in zip(relevant_docs, scores):
         sources.append({
             "file": Path(doc.metadata.get("source", "")).name,
-            "relevance": f"{score:.2%}", # similarity إلى نسبة مئوية
-            "preview": doc.page_content[:150], #ول 150 حرف 
+            "relevance": f"{score:.2%}", # similarity نسبة مئوية
+            "preview": doc.page_content[:150], # ول 150 حرف 
         })
 
-    #هنا ترجع النتيجة النهائية بشكل Structured
+    # هنا ترجع النتيجة النهائية بشكل Structured
     return {
         "answer": response_text,
         "sources": sources,
         "response_time": f"{round(time.time() - start_time, 2)} sec",#مدة تنفيذ الطلب
         "docs_retrieved": len(relevant_docs),    #عدد الـ chunks المستخدمة
                                                   #تقريب لـ رقمين عشريين
-    }
+           }
 
 
 def clear_history():
     global conversation_history
     conversation_history = []
-    print(" deleted done ya 3am mafesh ")
-
-
+    logger.info("Conversation history cleared")
+    #print(" deleted done ya 3am mafesh ")
 
 
 
