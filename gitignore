@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Google Colab
+/content/
+/gdrive/
+
+# Environment Variables
+.env
+.env.*
+*.env
+
+# API Keys and Secrets
+secrets.json
+credentials.json
+token.json
+
+# Hugging Face
+.huggingface/
+hf_cache/
+cache/
+.hf/
+
+# Models
+models/
+model/
+checkpoints/
+checkpoint-*/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# LoRA Adapters
+adapters/
+lora/
+adapter_model.bin
+adapter_model.safetensors
+
+# FAISS
+*.faiss
+faiss_index/
